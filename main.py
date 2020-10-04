@@ -8,6 +8,7 @@ import logging
 
 # Импортируем подмодули Flask для запуска веб-сервиса.
 from flask import Flask, request
+from random import shuffle
 
 app = Flask(__name__)
 
@@ -51,56 +52,43 @@ def handle_dialog(req, res):
         # Инициализируем сессию и поприветствуем его.
 
         sessionStorage[user_id] = {
-            'suggests': [
-                "Не хочу.",
-                "Не буду.",
-                "Отстань!",
-            ]
+            'formuls': {
+                "сопротивления": ['напряжение делить на силу тока', 'ю делить на и'],
+                "кпд": ["А полезное делить на А затраченное"],
+                "силы тяжести": ["масса умножить на ускорение свободного падения"],
+            },
+            'suggestions': shuffle(['сопротивления', "кпд", "силы тяжести"]),
+            'hp': 3,
+            'money': 0,
+            'category': 0  # вероятно сделаю выбор тем или между формулами по математике и физике
         }
 
-        res['response']['text'] = 'Привет! Купи слона!'
-        res['response']['buttons'] = get_suggests(user_id)
+        res['response']['text'] = 'Приветствую вас, вы тот самый герой, кто осмелился бросить вызов ' \
+                                  f'формулам по физике! Какая формула у {sessionStorage[user_id]["suggestions"][0]}'
         return
 
     # Обрабатываем ответ пользователя.
-    if req['request']['original_utterance'].lower() in [
-        'ладно',
-        'куплю',
-        'покупаю',
-        'хорошо',
-    ]:
-        # Пользователь согласился, прощаемся.
-        res['response']['text'] = 'Слона можно найти на Яндекс.Маркете!'
+    if req['request']['original_utterance'].lower() in sessionStorage[user_id]['formuls'][['suggestions'][0]]:
+        res['response']['text'] = 'Абсолютно верно!'
+        res['response']['tts'] = '<speaker audio="dialogs-upload/1d991873-206a-403b-b2bc-ad5fccbff23c/' \
+                                 '3d8976a6-c659-41e7-b952-93b31bcab52c.opus">'
+        sessionStorage[user_id]['suggestions'] = sessionStorage[user_id]['suggestions'][1:]
+    # if len(sessionStorage[user_id]["suggestions"]) < 1:
+    #       res['response']['text'] = 'Вы прошли тест!'
+    #     res['response']['tts'] = '<speaker audio="dialogs-upload/1d991873-206a-403b-b2bc-ad5fccbff23c/' \
+    #                              '3d8976a6-c659-41e7-b952-93b31bcab52c.opus">'
+    #     return
+
+    else:
+        res['response']['text'] = f'Неверно. Правильный' \
+                                  f' ответ: {sessionStorage[user_id]["formuls"][["suggestions"][0]][0]}'
+        res['response']['tts'] = '<speaker audio="dialogs-upload/1d991873-206a-403b-b2bc-ad5fccbff23c/' \
+                                 '02af3341-7103-4d66-90d7-f3f7140fdaff.opus">'
+        if sessionStorage[user_id]['hp'] < 1:
+            res['response']['text'] += 'Вы погибли, перезапустите навык...'
+            res['response']["end_session"] = True
+        sessionStorage[user_id]['suggestions'] = sessionStorage[user_id]['suggestions'][1:]
+    if len(sessionStorage[user_id]["suggestions"]) < 1:
+        res['response']['text'] = 'К сожалению тест подошёл к концу, пезапустите навык для новой попытки'
         return
-
-    # Если нет, то убеждаем его купить слона!
-    res['response']['text'] = 'Все говорят "%s", а ты купи слона!' % (
-        req['request']['original_utterance']
-    )
-    res['response']['buttons'] = get_suggests(user_id)
-
-
-# Функция возвращает две подсказки для ответа.
-def get_suggests(user_id):
-    session = sessionStorage[user_id]
-
-    # Выбираем две первые подсказки из массива.
-    suggests = [
-        {'title': suggest, 'hide': True}
-        for suggest in session['suggests'][:2]
-    ]
-
-    # Убираем первую подсказку, чтобы подсказки менялись каждый раз.
-    session['suggests'] = session['suggests'][1:]
-    sessionStorage[user_id] = session
-
-    # Если осталась только одна подсказка, предлагаем подсказку
-    # со ссылкой на Яндекс.Маркет.
-    if len(suggests) < 2:
-        suggests.append({
-            "title": "Ладно",
-            "url": "https://market.yandex.ru/search?text=слон",
-            "hide": True
-        })
-
-    return suggests
+    res['response']['text'] = 'АААААААААААААА'
