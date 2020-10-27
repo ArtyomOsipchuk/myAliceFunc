@@ -47,7 +47,8 @@ def handle_dialog(req, res):
     user_id = req['session']['user_id']
     if req['session']['new']:
         res['response']['text'] = 'Приветствую вас, вы тот самый герой, кто осмелился бросить вызов фор' \
-                                  'мулам по физике! Помните, что можно попросить меня повторить вопрос.' \
+                                  'мулам по физике! Всегда помните, что у вас всего 3 права на ошибку' \
+                                  ' и можно попросить меня повторить вопрос.' \
                                   ' Какой режим игры вы выбираете, сложность 1 - ' \
                                   'с выбором вариантов ответа или режим 2 - без вариантов ответа?'
         sessionStorage[request.json['session']['user_id']] = {'mode': 0}
@@ -59,12 +60,12 @@ def handle_dialog(req, res):
         else:
             hard(req, res)
             return
-    if '1' in req['request']['original_utterance'].lower() or \
+    if '1' in req['request']['nlu']["tokens"] or \
             'с вариантами' in req['request']['original_utterance'].lower():
         req['session']['new'] = True
         sessionStorage[user_id]['mode'] = 1
         easy(req, res)
-    elif '2' in req['request']['original_utterance'].lower() or \
+    elif '2' in req['request']['nlu']["tokens"] or \
             'без вариантов' in req['request']['original_utterance'].lower():
         req['session']['new'] = True
         sessionStorage[user_id]['mode'] = 2
@@ -85,8 +86,6 @@ def hard(req, res):
         req['session']['new'] = False
         # Это новый пользователь.
         # Инициализируем сессию и поприветствуем его.
-        list = ['сопротивления', "кпд", "силы тяжести"]
-        random.shuffle(list)
         sessionStorage[user_id] = {
             'formuls': {
                 "сопротивления": ['напряжение делить на силу тока', 'ю делить на и'],
@@ -94,14 +93,35 @@ def hard(req, res):
                 "силы тяжести": ["масса умножить на ускорение свободного падения",
                                  "массу умножить на ускорение свободного падения",
                                  "масса тела умножить на ускорение свободного падения"],
+                "центростремительного ускорения": ["скорость в квадрате делить на радиус", "в квадрат делить на р"],
+                "угловой скорости": ["скорость делить на радиус", "в делить на р"],
+                "плотности, выраженной через массу и объём": ["масса делить на объём", "м делить на в"],
+                "средней скорости": ["путь делить на время", "расстояние делить на время", "с делить на т"],
+                "второго закона ньютона": ["сила равно ускорению умноженному на ускорение",
+                                           "ф равно м умножить на а", "ф равно м а"],
+                "модуля силы трения скольжения": ["коэффициэнт трения умножить на силу реакции опоры",
+                                                  "мю умножить на н"],
+                "импульса тела": ["масса умножить на скорость", "м умножить на в", "м в"],
+                "для вычисления работы силы": ["силу умножить на расстояние и косинус направления работы",
+                                               "ф умножить на с и косинус альфа", "ф с кос альфа"],
+                "механической мощности": ["работа делить на время", "а делить на т"],
+                "кинетической энергии": ["полупроизведение массы и квадрата скорости", "м в квадрат делить на два"],
+                "потенциальной энергии": ["масса умножить на ускорение свободного падения умножить на высоту",
+                                          "произведение массы, ускорения свободного падения и высоты", "м г аш"],
+                "силы Архимеда": ["плотность жидкости умножить на ускорения свободного падения умножить на объём",
+                                  "произведение плотности жидкости, ускорения свободного падения и объёма", "п г аш"],
             },
-            "suggestions": list,
+            "suggestions": [],
             'hp': 3,
             'money': 0,
             'result': [],
             'mode': 2,
+            'hints': 0,
             'category': 0  # вероятно сделаю выбор тем или между формулами по математике и физике
         }
+        suggs = [i for i in sessionStorage[user_id]["formuls"].keys()]
+        random.shuffle(suggs)
+        sessionStorage[user_id]['suggestions'] = suggs
         sessionStorage[user_id]['result'] = [0, len(sessionStorage[user_id]['suggestions'])]
         res['response']['text'] = 'Вы выбрали сложность 2, отличный выбор! Какая формула у %s?' % (
             sessionStorage[user_id]["suggestions"][0]
@@ -113,12 +133,30 @@ def hard(req, res):
         )
         return
     # Обрабатываем ответ пользователя.
+    if sessionStorage[user_id]["hints"] > 0 and 'подсказка' in any(req['request']['original_utterance'].lower() or
+                                                                   "подсказку" in req['request'][
+                                                                       'original_utterance'].lower()):
+        sessionStorage[user_id]['suggestions'].pop(0)
+        sessionStorage[user_id]["result"][0] += 1
+        sessionStorage[user_id]["hints"] -= 1
+        sound = True
+        res['response']['text'] = 'Ответ %s. Мои подсказки как всегда верны!' % \
+                                  (sessionStorage[user_id]['formuls'][sessionStorage[user_id]['suggestions'][0]][0])
+        if len(sessionStorage[user_id]["suggestions"]) > 0:
+            res['response']['text'] += ' Теперь ответь какова формула %s?' % (sessionStorage[user_id]["suggestions"][0])
+
     if req['request']['original_utterance'].lower() in sessionStorage[user_id]['formuls'][
         sessionStorage[user_id]['suggestions'][0]]:
         sessionStorage[user_id]['suggestions'].pop(0)
         sessionStorage[user_id]["result"][0] += 1
+        if sessionStorage[user_id]['result'][0] % 5 == 0 and sessionStorage[user_id]['result'][0] != 0:
+            sessionStorage[user_id]['hints'] += 1
+            res['response']['text'] += ' Вы были благославлены богами за 5 правильных ответов,' \
+                                       ' теперь вы можете попросить подсказку для автоматической' \
+                                       ' победы над формулой. Текущий баланс подсказок %s.' \
+                                       % (sessionStorage[user_id]['hints'])
         sound = True
-        res['response']['text'] = 'Абсолютно верно!'
+        res['response']['text'] = ' Абсолютно верно!'
         if len(sessionStorage[user_id]["suggestions"]) > 0:
             res['response']['text'] += ' Теперь ответь какова формула %s?' % (sessionStorage[user_id]["suggestions"][0])
 
@@ -158,7 +196,8 @@ def easy(req, res):
         req['session']['new'] = False
         # Это новый пользователь.
         # Инициализируем сессию и поприветствуем его.
-        list = ['сопротивления', "кпд", "силы тяжести"]
+        list = ['сопротивления', "кпд", "силы тяжести", "центростремительного ускорения",
+                "угловой скорости", "плотности, выраженной через массу и объём"]
         random.shuffle(list)
         sessionStorage[user_id] = {
             'formuls': {
@@ -170,6 +209,15 @@ def easy(req, res):
                 "силы тяжести": ["масса умножить на ускорение свободного падения",
                                  "массу делить на ускорение свободного падения",
                                  "масса тела плюс на ускорение свободного падения"],
+                "центростремительного ускорения": ["скорость в квадрате делить на радиус",
+                                                   "скорость в квадрате умножить на радиус",
+                                                   "скорость делить на радиус в квадрате",
+                                                   "скорость в квадрате умножить на радиус в квадрате"],
+                "угловой скорости": ["скорость делить на радиус", "скорость умножить на радиус",
+                                     "скорость делить на радиус в квадрате", "скорость умножить на удвоенный радиус"],
+                "плотности, выраженной через массу и объём": ["масса делить на объём", "масса умножить на объём",
+                                                              "масса делить на удвоенный объём",
+                                                              "масса умножить на объём в квадрате"],
             },
             "suggestions": list,
             'hp': 3,
@@ -177,6 +225,7 @@ def easy(req, res):
             'result': [],
             'mode': 1,
             'right': 0,
+            'hints': 0,
             'category': 0  # вероятно сделаю выбор тем или между формулами по математике и физике
         }
         sessionStorage[user_id]['result'] = [0, len(sessionStorage[user_id]['suggestions'])]
